@@ -1,0 +1,145 @@
+{
+	"name": "DF_Transform_Orders",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "DS_DF_source_orders",
+						"type": "DatasetReference"
+					},
+					"name": "SourceOrders"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "ds_customer_sales",
+						"type": "DatasetReference"
+					},
+					"name": "SinkCustomerSales"
+				},
+				{
+					"dataset": {
+						"referenceName": "Ds_highervaluesales",
+						"type": "DatasetReference"
+					},
+					"name": "sinklowervalue"
+				},
+				{
+					"dataset": {
+						"referenceName": "Ds_lower_value_orders",
+						"type": "DatasetReference"
+					},
+					"name": "SinkHighValueOrders"
+				}
+			],
+			"transformations": [
+				{
+					"name": "RemoveCancelledOrders"
+				},
+				{
+					"name": "DerivedTax"
+				},
+				{
+					"name": "DerivedTotal"
+				},
+				{
+					"name": "AggregateCustomerSales"
+				},
+				{
+					"name": "SortSales"
+				},
+				{
+					"name": "SplitOrder"
+				},
+				{
+					"name": "SelectCustomerSales"
+				}
+			],
+			"scriptLines": [
+				"source(output(",
+				"          order_id as integer,",
+				"          customer_id as integer,",
+				"          amount as integer,",
+				"          status as string,",
+				"          order_date as date",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     ignoreNoFilesFound: false,",
+				"     partitionBy('hash', 1)) ~> SourceOrders",
+				"SourceOrders filter(status != 'Cancelled',",
+				"     partitionBy('hash', 1)) ~> RemoveCancelledOrders",
+				"RemoveCancelledOrders derive(Tax_Amount = amount * 0.10,",
+				"     partitionBy('hash', 1)) ~> DerivedTax",
+				"DerivedTax derive(Total_Amount = amount+Tax_Amount,",
+				"     partitionBy('hash', 1)) ~> DerivedTotal",
+				"DerivedTotal aggregate(groupBy(customer_id),",
+				"     total_sales = sum(Total_Amount),",
+				"          order_count = count(),",
+				"          average_order_amount = avg(Total_Amount)) ~> AggregateCustomerSales",
+				"AggregateCustomerSales sort(desc(total_sales, true)) ~> SortSales",
+				"DerivedTotal split(Total_Amount>= 2000,",
+				"     Total_Amount<2000,",
+				"     disjoint: false) ~> SplitOrder@(HighValueOrders, RegularOrders)",
+				"SortSales select(mapColumn(",
+				"          customer_id,",
+				"          total_sales,",
+				"          order_count,",
+				"          average_order_amount",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> SelectCustomerSales",
+				"SelectCustomerSales sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     input(",
+				"          customer_id as string,",
+				"          total_sales as string,",
+				"          order_count as string,",
+				"          average_order_amount as string",
+				"     ),",
+				"     partitionFileNames:['customer_sales_summary.csv'],",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     partitionBy('hash', 1)) ~> SinkCustomerSales",
+				"SplitOrder@RegularOrders sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     input(",
+				"          order_id as string,",
+				"          customer_id as string,",
+				"          amount as string,",
+				"          status as string,",
+				"          order_date as string",
+				"     ),",
+				"     partitionFileNames:['lower_value_orders.csv'],",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     partitionBy('hash', 1)) ~> sinklowervalue",
+				"SplitOrder@HighValueOrders sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     input(",
+				"          order_id as string,",
+				"          customer_id as string,",
+				"          amount as string,",
+				"          status as string,",
+				"          order_date as string",
+				"     ),",
+				"     partitionFileNames:['high_value_orders.csv'],",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     partitionBy('hash', 1)) ~> SinkHighValueOrders"
+			]
+		}
+	}
+}

@@ -1,0 +1,122 @@
+{
+	"name": "DF_Customer_Transformation",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "DS_INPUT_SOURCE_Customers",
+						"type": "DatasetReference"
+					},
+					"name": "SourceCustomers"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "Ds_DL_ouptut_Customer_With_Email",
+						"type": "DatasetReference"
+					},
+					"name": "SinkCustomersWithEmail"
+				},
+				{
+					"dataset": {
+						"referenceName": "Ds_Customer_OutPut_withoutEmail",
+						"type": "DatasetReference"
+					},
+					"name": "SinkWithOutEmail"
+				},
+				{
+					"dataset": {
+						"referenceName": "Ds_customer_output_city_count",
+						"type": "DatasetReference"
+					},
+					"name": "SinkCitySummary"
+				}
+			],
+			"transformations": [
+				{
+					"name": "FilterValidCustomer"
+				},
+				{
+					"name": "SplitCustomersByEmail"
+				},
+				{
+					"name": "AggregateCityCustomers"
+				},
+				{
+					"name": "SortCityCustomers"
+				}
+			],
+			"scriptLines": [
+				"source(output(",
+				"          customer_id as integer,",
+				"          customer_name as string,",
+				"          city as string,",
+				"          email as string",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     ignoreNoFilesFound: false,",
+				"     partitionBy('hash', 1)) ~> SourceCustomers",
+				"SourceCustomers filter(!isNull(customer_id) && !isNull(customer_name) && trim(customer_name)!='' && !regexMatch(trim(customer_name), '.*[0-9].*'),",
+				"     partitionBy('hash', 1)) ~> FilterValidCustomer",
+				"FilterValidCustomer split(!isNull(email) && trim(email) != '',",
+				"     isNull(email) || trim(email) == '',",
+				"     disjoint: false) ~> SplitCustomersByEmail@(CustomersWithEmail, CustomersWithoutEmail)",
+				"FilterValidCustomer aggregate(groupBy(city),",
+				"     customer_Count = count()) ~> AggregateCityCustomers",
+				"AggregateCityCustomers sort(desc(customer_Count, true)) ~> SortCityCustomers",
+				"SplitCustomersByEmail@CustomersWithEmail sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     input(",
+				"          order_id as string,",
+				"          customer_id as string,",
+				"          amount as string,",
+				"          status as string,",
+				"          order_date as string",
+				"     ),",
+				"     partitionFileNames:['customers_with_email.csv'],",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     partitionBy('hash', 1)) ~> SinkCustomersWithEmail",
+				"SplitCustomersByEmail@CustomersWithoutEmail sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     input(",
+				"          order_id as string,",
+				"          customer_id as string,",
+				"          amount as string,",
+				"          status as string,",
+				"          order_date as string",
+				"     ),",
+				"     partitionFileNames:['customers_withOut_email.csv'],",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     partitionBy('hash', 1)) ~> SinkWithOutEmail",
+				"SortCityCustomers sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     input(",
+				"          order_id as string,",
+				"          customer_id as string,",
+				"          amount as string,",
+				"          status as string,",
+				"          order_date as string",
+				"     ),",
+				"     partitionFileNames:['customer_city_summary.csv'],",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     partitionBy('hash', 1)) ~> SinkCitySummary"
+			]
+		}
+	}
+}

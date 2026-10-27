@@ -1,0 +1,15 @@
+{
+	"name": "chakri-project-adf",
+	"properties": {
+		"trustModeClaimForMi": {
+			"value": "Disabled",
+			"editable": true
+		}
+	},
+	"location": "centralindia",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "34f0afd5-e6c3-4de4-b0d9-a64bf27e3e05",
+		"tenantId": "377383c2-3be0-4e01-b2c8-8526d5e58adb"
+	}
+}
